@@ -1,0 +1,14 @@
+import os
+import subprocess
+from util import create_tsv_file
+
+if __name__ == '__main__':
+
+    subprocess.call(['bash', '-c', 'wget http://jwebpro.sourceforge.net/data-web-snippets.tar.gz'])
+    subprocess.call(['bash', '-c', 'tar xvzf data-web-snippets.tar.gz'])
+
+    if not os.path.exists('data'):
+        os.mkdir('data')
+
+    create_tsv_file('data-web-snippets/train.txt', 'data/train.tsv')
+    create_tsv_file('data-web-snippets/test.txt', 'data/test.tsv')
