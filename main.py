@@ -9,6 +9,7 @@ import numpy as np
 from sklearn.externals import  joblib
 import torch
 from torch import nn
+import torch.backends.cudnn as cudnn
 
 from vocab import  VocabBuilder
 from dataloader import TextClassDataLoader
@@ -18,34 +19,21 @@ from util import adjust_learning_rate
 
 np.random.seed(0)
 torch.manual_seed(0)
-torch.backends.cudnn.enabled = False
-
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-parser.add_argument('--epochs', default=30, type=int, metavar='N',
-                    help='number of total epochs to run')
-parser.add_argument('-b', '--batch-size', default=64, type=int,
-                    metavar='N', help='mini-batch size')
-parser.add_argument('--lr', '--learning-rate', default=0.003, type=float,
-                    metavar='LR', help='initial learning rate')
-parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
-                    metavar='W', help='weight decay')
-parser.add_argument('--print-freq', '-p', default=10, type=int,
-                    metavar='N', help='print frequency')
-parser.add_argument('--embedding-size', default=128, type=int,
-                    metavar='N', help='embedding size')
-parser.add_argument('--hidden-size', default=32, type=int,
-                    metavar='N', help='rnn hidden size')
-parser.add_argument('--layers', default=1, type=int,
-                    metavar='N', help='number of rnn layers')
-parser.add_argument('--classes', default=8, type=int,
-                    metavar='N', help='number of output classes')
-parser.add_argument('--min-samples', default=2, type=int,
-                    metavar='N', help='min number of tokens')
-
+parser.add_argument('--epochs', default=50, type=int, metavar='N', help='number of total epochs to run')
+parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N', help='mini-batch size')
+parser.add_argument('--lr', '--learning-rate', default=0.01, type=float, metavar='LR', help='initial learning rate')
+parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float, metavar='W', help='weight decay')
+parser.add_argument('--print-freq', '-p', default=10, type=int, metavar='N', help='print frequency')
+parser.add_argument('--save-freq', '-sf', default=10, type=int, metavar='N', help='model save frequency(epoch)')
+parser.add_argument('--embedding-size', default=256, type=int, metavar='N', help='embedding size')
+parser.add_argument('--hidden-size', default=32, type=int, metavar='N', help='rnn hidden size')
+parser.add_argument('--layers', default=2, type=int, metavar='N', help='number of rnn layers')
+parser.add_argument('--classes', default=8, type=int, metavar='N', help='number of output classes')
+parser.add_argument('--min-samples', default=3, type=int, metavar='N', help='min number of tokens')
+parser.add_argument('--cuda', default=False, action='store_true', help='use cuda')
 args = parser.parse_args()
-
 
 # create vocab
 print("===> creating vocabs ...")
@@ -83,6 +71,12 @@ criterion = nn.CrossEntropyLoss()
 print(optimizer)
 print(criterion)
 
+if args.cuda:
+    torch.backends.cudnn.enabled = True
+    cudnn.benchmark = True
+    model.cuda()
+    criterion = criterion.cuda()
+
 
 def train(train_loader, model, criterion, optimizer, epoch):
     batch_time = AverageMeter()
@@ -94,15 +88,19 @@ def train(train_loader, model, criterion, optimizer, epoch):
     model.train()
 
     end = time.time()
-    for i, (input, target) in enumerate(train_loader):
+    for i, (input, target, seq_lengths) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
+
+        if args.cuda:
+            input = input.cuda(async=True)
+            target = target.cuda(async=True)
 
         input_var = torch.autograd.Variable(input)
         target_var = torch.autograd.Variable(target)
 
         # compute output
-        output = model(input_var)
+        output = model(input_var, seq_lengths)
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
@@ -139,13 +137,17 @@ def test(val_loader, model, criterion):
     model.eval()
 
     end = time.time()
-    for i, (input, target) in enumerate(val_loader):
+    for i, (input, target,seq_lengths) in enumerate(val_loader):
+
+        if args.cuda:
+            input = input.cuda(async=True)
+            target = target.cuda(async=True)
 
         input_var = torch.autograd.Variable(input, volatile=True)
         target_var = torch.autograd.Variable(target, volatile=True)
 
         # compute output
-        output = model(input_var)
+        output = model(input_var,seq_lengths)
         loss = criterion(output, target_var)
 
         # measure accuracy and record loss
@@ -180,7 +182,8 @@ for epoch in range(1, args.epochs+1):
     test(val_loader, model, criterion)
 
     # save current model
-    name_model = 'rnn_{}.pkl'.format(epoch)
-    path_save_model = os.path.join('gen', name_model)
-    joblib.dump(model, path_save_model, compress=3)
+    if epoch % args.save_freq == 0:
+        name_model = 'rnn_{}.pkl'.format(epoch)
+        path_save_model = os.path.join('gen', name_model)
+        joblib.dump(model.float(), path_save_model, compress=2)
 

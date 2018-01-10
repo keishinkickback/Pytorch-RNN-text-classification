@@ -1,11 +1,11 @@
 # RNN-based short text classification
 
-- This is for multi-label short text classification.
-- Model is built with Word Embedding, GRU, and Fully-connected layer by [Pytorch](http://pytorch.org).
-- A mini-batch is created by 0 padding.
+- This is for multi-class short text classification.
+- Model is built with Word Embedding, LSTM, and Fully-connected layer by [Pytorch](http://pytorch.org).
+- A mini-batch is created by 0 padding and processed by using torch.nn.utils.rnn.PackedSequence.
 - Cross-entropy Loss + Adam optimizer.
 ## Model
-- Embedding --> Dropout --> Bidirectional GRU -->  Average pooling --> Dropout --> FC.
+- Embedding --> Dropout --> LSTM  --> Dropout --> FC.
 
 
 

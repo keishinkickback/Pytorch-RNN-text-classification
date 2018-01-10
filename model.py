@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+
 
 class RNN(nn.Module):
 
@@ -20,50 +22,47 @@ class RNN(nn.Module):
         # embedding
         self.encoder = nn.Embedding(vocab_size, embed_size, padding_idx=0)
 
-        # bn1
-        # self.bn1 = nn.BatchNorm1d(embed_size)
         self.drop_en = nn.Dropout(p=0.8)
 
         # rnn module
-        self.rnn = nn.GRU(
+        self.rnn = nn.LSTM(
             input_size=embed_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
-            dropout=0.8,
+            dropout=0.5,
             batch_first=True,
             bidirectional=True
         )
 
-        # self.bn2 = nn.BatchNorm1d(hidden_size*2)
-        self.drop = nn.Dropout(p=0.8)
+        self.bn2 = nn.BatchNorm1d(hidden_size*2)
         self.fc = nn.Linear(hidden_size*2, num_output)
 
-    def forward(self, x):
+    def forward(self, x, seq_lengths):
         '''
         :param x: (batch, time_step, input_size)
         :return: num_output size
         '''
 
-        x = self.encoder(x)
-
-        x = self.drop_en(x)
-
-        # x = x.transpose(1, 2)
-        # # print(x.size())
-        # x = self.bn1(x)
-        # x = x.transpose(1, 2)
+        x_embed = self.encoder(x)
+        x_embed = self.drop_en(x_embed)
+        packed_input = pack_padded_sequence(x_embed, seq_lengths.cpu().numpy(),batch_first=True)
 
         # r_out shape (batch, time_step, output_size)
         # None is for initial hidden state
-        r_out, h_n = self.rnn(x, None)
-
-        # only use the final output
-        # out = r_out[:, -1, :]
+        packed_output, (ht, ct) = self.rnn(packed_input, None)
 
         # use mean of outputs
-        out = torch.mean(r_out, dim=1)
+        out_rnn, _ = pad_packed_sequence(packed_output, batch_first=True)
 
-        # out = self.bn2(out)
-        out = self.drop(out)
-        out = self.fc(out)
+        row_indices = torch.arange(0, x.size(0)).long()
+        col_indices = seq_lengths - 1
+        if next(self.parameters()).is_cuda:
+            row_indices = row_indices.cuda()
+            col_indices = col_indices.cuda()
+
+        last_tensor=out_rnn[row_indices, col_indices, :]
+        # fc_input = torch.mean(last_tensor, dim=1)
+
+        fc_input = self.bn2(last_tensor)
+        out = self.fc(fc_input)
         return out

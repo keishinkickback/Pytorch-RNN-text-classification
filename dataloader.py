@@ -46,13 +46,13 @@ class TextClassDataLoader(object):
         return indexify
 
     @staticmethod
-    def _padding(batch):
-        batch = sorted(batch, key=lambda x: len(x[1]))
-        size = len(batch[-1][1])
-        for i, x in enumerate(batch):
-            missing = size - len(x[1])
-            batch[i][1] = [0 for _ in range(missing)] + batch[i][1]
-        return batch
+    def _padding(batch_x):
+        batch_s = sorted(batch_x, key=lambda x: len(x))
+        size = len(batch_s[-1])
+        for i, x in enumerate(batch_x):
+            missing = size - len(x)
+            batch_x[i] =  batch_x[i] + [0 for _ in range(missing)]
+        return batch_x
 
     def _create_batch(self):
         batch = []
@@ -63,12 +63,27 @@ class TextClassDataLoader(object):
             self.index += 1
             n += 1
         self.batch_index += 1
-        batch = self._padding(batch)
+
         label, string = tuple(zip(*batch))
 
+        # get the length of each seq in your batch
+        seq_lengths = torch.LongTensor(map(len, string))
+
+        # dump padding everywhere, and place seqs on the left.
+        # NOTE: you only need a tensor as big as your longest sequence
+        seq_tensor = torch.zeros((len(string), seq_lengths.max())).long()
+        for idx, (seq, seqlen) in enumerate(zip(string, seq_lengths)):
+            seq_tensor[idx, :seqlen] = torch.LongTensor(seq)
+
+        # SORT YOUR TENSORS BY LENGTH!
+        seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
+        seq_tensor = seq_tensor[perm_idx]
+        # seq_tensor = seq_tensor.transpose(0, 1)
+
         label = torch.LongTensor(label)
-        string = torch.LongTensor(string)
-        return string, label
+        label = label[perm_idx]
+
+        return seq_tensor, label, seq_lengths
 
     def __len__(self):
         return self.n_batches

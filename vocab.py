@@ -15,8 +15,7 @@ class VocabBuilder():
         if path_file:
             word_count = self.count_from_file(path_file)
             # truncate low fq word
-            self.word_to_index =\
-                self.create_word_to_index(word_count, min_sample)
+            self.word_to_index = self.create_word_to_index(word_count, min_sample)
         else:
             raise RuntimeError('need path_file')
 
