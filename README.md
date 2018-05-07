@@ -14,7 +14,7 @@
  [Learning to Classify Short and Sparse Text & Web with Hidden Topics from Large-scale Data Collections](http://wwwconference.org/www2008/papers/pdf/p91-phanA.pdf)
  from [here](http://jwebpro.sourceforge.net/data-web-snippets.tar.gz) and process it for training.
 ```
-python preprocessing.py
+python preprocess.py
 ```
 
 ## Training
