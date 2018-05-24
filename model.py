@@ -5,16 +5,15 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class RNN(nn.Module):
 
-    def __init__(self, vocab_size, embed_size, num_output, hidden_size=64,
-                                          num_layers=1,batch_first=True):
-
+    def __init__(self, vocab_size, embed_size, num_output, hidden_size=64, num_layers=1,batch_first=True):
         '''
-        :param vocab_size: vocab size
-        :param embed_size: embedding size
-        :param num_output: number of output (classes)
-        :param hidden_size: hidden size of rnn module
-        :param num_layers: number of layers in rnn module
-        :param batch_first: batch first option
+        Args:
+            vocab_size: vocab size
+            embed_size: embedding size
+            num_output: number of output (classes)
+            hidden_size: hidden size of rnn module
+            num_layers: number of layers in rnn module
+            batch_first: batch first option
         '''
 
         super(RNN, self).__init__()
@@ -22,10 +21,10 @@ class RNN(nn.Module):
         # embedding
         self.encoder = nn.Embedding(vocab_size, embed_size, padding_idx=0)
 
-        self.drop_en = nn.Dropout(p=0.8)
+        self.drop_en = nn.Dropout(p=0.6)
 
         # rnn module
-        self.rnn = nn.LSTM(
+        self.rnn = nn.GRU(
             input_size=embed_size,
             hidden_size=hidden_size,
             num_layers=num_layers,
@@ -39,8 +38,11 @@ class RNN(nn.Module):
 
     def forward(self, x, seq_lengths):
         '''
-        :param x: (batch, time_step, input_size)
-        :return: num_output size
+        Args:
+            x: (batch, time_step, input_size)
+
+        Returns:
+            num_output size
         '''
 
         x_embed = self.encoder(x)
@@ -49,7 +51,8 @@ class RNN(nn.Module):
 
         # r_out shape (batch, time_step, output_size)
         # None is for initial hidden state
-        packed_output, (ht, ct) = self.rnn(packed_input, None)
+        # packed_output, (ht, ct) = self.rnn(packed_input, None)
+        packed_output, ht = self.rnn(packed_input, None)
 
         # use mean of outputs
         out_rnn, _ = pad_packed_sequence(packed_output, batch_first=True)

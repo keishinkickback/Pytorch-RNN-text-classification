@@ -1,3 +1,4 @@
+from __future__ import print_function
 import torch
 import pandas as pd
 import numpy as np
@@ -7,26 +8,37 @@ import util as ut
 class TextClassDataLoader(object):
 
     def __init__(self, path_file, word_to_index, batch_size=32):
+        """
+
+        Args:
+            path_file:
+            word_to_index:
+            batch_size:
+        """
 
         self.batch_size = batch_size
         self.word_to_index = word_to_index
 
-        df = pd.read_csv(path_file,delimiter='\t')
+        # read file
+        df = pd.read_csv(path_file, delimiter='\t')
         df['body'] = df['body'].apply(ut._tokenize)
         df['body'] = df['body'].apply(self.generate_indexifyer())
         self.samples = df.values.tolist()
 
-        self.shuffle_indices()
-        self.n_batches = int(len(self.samples) / self.batch_size)
-        self.max_length = self.get_max_length()
+        # for batch
+        self.n_samples = len(self.samples)
+        self.n_batches = int(self.n_samples / self.batch_size)
+        self.max_length = self._get_max_length()
+        self._shuffle_indices()
+
         self.report()
 
-    def shuffle_indices(self):
-        self.indices = np.random.permutation(len(self.samples))
+    def _shuffle_indices(self):
+        self.indices = np.random.permutation(self.n_samples)
         self.index = 0
         self.batch_index = 0
 
-    def get_max_length(self):
+    def _get_max_length(self):
         length = 0
         for sample in self.samples:
             length = max(length, len(sample[1]))
@@ -89,7 +101,7 @@ class TextClassDataLoader(object):
         return self.n_batches
 
     def __iter__(self):
-        self.shuffle_indices()
+        self._shuffle_indices()
         for i in range(self.n_batches):
             if self.batch_index == self.n_batches:
                 raise StopIteration()
@@ -97,10 +109,10 @@ class TextClassDataLoader(object):
 
     def show_samples(self, n=10):
         for sample in self.samples[:n]:
-            print sample
+            print(sample)
 
     def report(self):
-        print '# samples: {}'.format(len(self.samples))
-        print 'max len: {}'.format(self.max_length)
-        print '# vocab: {}'.format(len(self.word_to_index))
-        print '# batches: {} (batch_size = {})'.format(self.n_batches, self.batch_size)
+        print('# samples: {}'.format(len(self.samples)))
+        print('max len: {}'.format(self.max_length))
+        print('# vocab: {}'.format(len(self.word_to_index)))
+        print('# batches: {} (batch_size = {})'.format(self.n_batches, self.batch_size))

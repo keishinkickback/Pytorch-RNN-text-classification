@@ -31,9 +31,11 @@ parser.add_argument('--embedding-size', default=256, type=int, metavar='N', help
 parser.add_argument('--hidden-size', default=32, type=int, metavar='N', help='rnn hidden size')
 parser.add_argument('--layers', default=2, type=int, metavar='N', help='number of rnn layers')
 parser.add_argument('--classes', default=8, type=int, metavar='N', help='number of output classes')
-parser.add_argument('--min-samples', default=3, type=int, metavar='N', help='min number of tokens')
+parser.add_argument('--min-samples', default=5, type=int, metavar='N', help='min number of tokens')
 parser.add_argument('--cuda', default=False, action='store_true', help='use cuda')
 args = parser.parse_args()
+
+print('args: ',args)
 
 # create vocab
 print("===> creating vocabs ...")

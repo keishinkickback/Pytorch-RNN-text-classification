@@ -36,7 +36,7 @@ class VocabBuilder():
 
         return word_count
 
-    def create_word_to_index(self,word_count, min_sample=1):
+    def create_word_to_index(self, word_count, min_sample=1):
 
         # create vocab
         word_to_index = {}
