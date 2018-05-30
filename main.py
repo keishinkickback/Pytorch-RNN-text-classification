@@ -23,7 +23,7 @@ torch.manual_seed(0)
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--epochs', default=50, type=int, metavar='N', help='number of total epochs to run')
 parser.add_argument('-b', '--batch-size', default=128, type=int, metavar='N', help='mini-batch size')
-parser.add_argument('--lr', '--learning-rate', default=0.01, type=float, metavar='LR', help='initial learning rate')
+parser.add_argument('--lr', '--learning-rate', default=0.005, type=float, metavar='LR', help='initial learning rate')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float, metavar='W', help='weight decay')
 parser.add_argument('--print-freq', '-p', default=10, type=int, metavar='N', help='print frequency')
 parser.add_argument('--save-freq', '-sf', default=10, type=int, metavar='N', help='model save frequency(epoch)')
@@ -36,6 +36,7 @@ parser.add_argument('--cuda', default=False, action='store_true', help='use cuda
 parser.add_argument('--glove', default='glove/glove.6B.100d.txt', action='store_true', help='path to glove txt')
 parser.add_argument('--rnn', default='LSTM', choices=['LSTM', 'GRU'], help='rnn module type')
 parser.add_argument('--mean_seq', default=False, action='store_true', help='use mean of rnn outputs')
+parser.add_argument('--clip', type=float, default=0.25, help='gradient clipping')
 args = parser.parse_args()
 
 
@@ -118,6 +119,8 @@ def train(train_loader, model, criterion, optimizer, epoch):
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
         optimizer.step()
 
         # measure elapsed time
