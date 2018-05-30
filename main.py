@@ -11,7 +11,7 @@ import torch
 from torch import nn
 import torch.backends.cudnn as cudnn
 
-from vocab import  VocabBuilder
+from vocab import  VocabBuilder, GloveVocabBuilder
 from dataloader import TextClassDataLoader
 from model import RNN
 from util import AverageMeter, accuracy
@@ -22,34 +22,41 @@ torch.manual_seed(0)
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--epochs', default=50, type=int, metavar='N', help='number of total epochs to run')
-parser.add_argument('-b', '--batch-size', default=256, type=int, metavar='N', help='mini-batch size')
+parser.add_argument('-b', '--batch-size', default=128, type=int, metavar='N', help='mini-batch size')
 parser.add_argument('--lr', '--learning-rate', default=0.01, type=float, metavar='LR', help='initial learning rate')
 parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float, metavar='W', help='weight decay')
 parser.add_argument('--print-freq', '-p', default=10, type=int, metavar='N', help='print frequency')
 parser.add_argument('--save-freq', '-sf', default=10, type=int, metavar='N', help='model save frequency(epoch)')
-parser.add_argument('--embedding-size', default=256, type=int, metavar='N', help='embedding size')
-parser.add_argument('--hidden-size', default=32, type=int, metavar='N', help='rnn hidden size')
+parser.add_argument('--embedding-size', default=50, type=int, metavar='N', help='embedding size')
+parser.add_argument('--hidden-size', default=128, type=int, metavar='N', help='rnn hidden size')
 parser.add_argument('--layers', default=2, type=int, metavar='N', help='number of rnn layers')
 parser.add_argument('--classes', default=8, type=int, metavar='N', help='number of output classes')
 parser.add_argument('--min-samples', default=5, type=int, metavar='N', help='min number of tokens')
 parser.add_argument('--cuda', default=False, action='store_true', help='use cuda')
+parser.add_argument('--glove', default='glove/glove.6B.100d.txt', action='store_true', help='path to glove txt')
+parser.add_argument('--rnn', default='LSTM', choices=['LSTM', 'GRU'], help='rnn module type')
+parser.add_argument('--mean_seq', default=False, action='store_true', help='use mean of rnn outputs')
 args = parser.parse_args()
 
-print('args: ',args)
 
 # create vocab
 print("===> creating vocabs ...")
 end = time.time()
-v_builder = VocabBuilder(path_file='data/train.tsv', min_sample=args.min_samples)
-d_word_index = v_builder.get_word_index()
-vocab_size = len(d_word_index)
+v_builder, d_word_index, embed = None, None, None
+if os.path.exists(args.glove):
+    v_builder = GloveVocabBuilder(path_glove=args.glove)
+    d_word_index, embed = v_builder.get_word_index()
+    args.embedding_size = embed.size(1)
+else:
+    v_builder = VocabBuilder(path_file='data/train.tsv')
+    d_word_index, embed = v_builder.get_word_index(min_sample=args.min_samples)
 
 if not os.path.exists('gen'):
     os.mkdir('gen')
-
 joblib.dump(d_word_index, 'gen/d_word_index.pkl', compress=3)
 print('===> vocab creatin: {t:.3f}'.format(t=time.time()-end))
 
+print('args: ',args)
 
 # create trainer
 print("===> creating dataloaders ...")
@@ -61,14 +68,15 @@ print('===> dataloader creatin: {t:.3f}'.format(t=time.time()-end))
 
 # create model
 print("===> creating rnn model ...")
-model = RNN(vocab_size=vocab_size, embed_size=args.embedding_size,
-            num_output=args.classes, hidden_size=args.hidden_size,
-            num_layers=args.layers, batch_first=True)
+vocab_size = len(d_word_index)
+model = RNN(vocab_size=vocab_size, embed_size=args.embedding_size, num_output=args.classes, rnn_model=args.rnn,
+            use_last=( not args.mean_seq),
+            hidden_size=args.hidden_size, embedding_tensor=embed, num_layers=args.layers, batch_first=True)
 print(model)
 
-
 # optimizer and loss
-optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=args.lr, weight_decay=args.weight_decay)
+
 criterion = nn.CrossEntropyLoss()
 print(optimizer)
 print(criterion)
@@ -98,16 +106,13 @@ def train(train_loader, model, criterion, optimizer, epoch):
             input = input.cuda(async=True)
             target = target.cuda(async=True)
 
-        input_var = torch.autograd.Variable(input)
-        target_var = torch.autograd.Variable(target)
-
         # compute output
-        output = model(input_var, seq_lengths)
-        loss = criterion(output, target_var)
+        output = model(input, seq_lengths)
+        loss = criterion(output, target)
 
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target, topk=(1,))
-        losses.update(loss.data[0], input.size(0))
+        losses.update(loss.data, input.size(0))
         top1.update(prec1[0][0], input.size(0))
 
         # compute gradient and do SGD step
@@ -120,13 +125,10 @@ def train(train_loader, model, criterion, optimizer, epoch):
         end = time.time()
 
         if i != 0 and i % args.print_freq == 0:
-            print('Epoch: [{0}][{1}/{2}]  '
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})  '
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})  '
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})  '
+            print('Epoch: [{0}][{1}/{2}]  Time {batch_time.val:.3f} ({batch_time.avg:.3f})  '
+                  'Data {data_time.val:.3f} ({data_time.avg:.3f})  Loss {loss.val:.4f} ({loss.avg:.4f})  '
                   'Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses, top1=top1))
+                   epoch, i, len(train_loader), batch_time=batch_time, data_time=data_time, loss=losses, top1=top1))
             gc.collect()
 
 
@@ -137,7 +139,6 @@ def test(val_loader, model, criterion):
 
     # switch to evaluate mode
     model.eval()
-
     end = time.time()
     for i, (input, target,seq_lengths) in enumerate(val_loader):
 
@@ -145,16 +146,13 @@ def test(val_loader, model, criterion):
             input = input.cuda(async=True)
             target = target.cuda(async=True)
 
-        input_var = torch.autograd.Variable(input, volatile=True)
-        target_var = torch.autograd.Variable(target, volatile=True)
-
         # compute output
-        output = model(input_var,seq_lengths)
-        loss = criterion(output, target_var)
+        output = model(input,seq_lengths)
+        loss = criterion(output, target)
 
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target, topk=(1,))
-        losses.update(loss.data[0], input.size(0))
+        losses.update(loss.data, input.size(0))
         top1.update(prec1[0][0], input.size(0))
 
         # measure elapsed time
@@ -162,17 +160,12 @@ def test(val_loader, model, criterion):
         end = time.time()
 
         if i!= 0 and i % args.print_freq == 0:
-            print('Test: [{0}/{1}]  '
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})  '
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})  '
-                  'Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
-                   i, len(val_loader), batch_time=batch_time, loss=losses,
-                   top1=top1))
+            print('Test: [{0}/{1}]  Time {batch_time.val:.3f} ({batch_time.avg:.3f})  '
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})  Prec@1 {top1.val:.3f} ({top1.avg:.3f})'.format(
+                   i, len(val_loader), batch_time=batch_time, loss=losses, top1=top1))
             gc.collect()
 
-    print(' * Prec@1 {top1.avg:.3f}'
-          .format(top1=top1))
-
+    print(' * Prec@1 {top1.avg:.3f}'.format(top1=top1))
     return top1.avg
 
 
@@ -188,4 +181,3 @@ for epoch in range(1, args.epochs+1):
         name_model = 'rnn_{}.pkl'.format(epoch)
         path_save_model = os.path.join('gen', name_model)
         joblib.dump(model.float(), path_save_model, compress=2)
-

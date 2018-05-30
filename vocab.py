@@ -1,77 +1,100 @@
-from collections import defaultdict
+from collections import Counter
 
 import pandas as pd
+import torchwordemb
+import torch
 
 import util as ut
 
 
-class VocabBuilder():
+class VocabBuilder(object):
     '''
     Read file and create word_to_index dictionary.
     This can truncate low-frequency words with min_sample option.
     '''
-    def __init__(self, path_file=None, min_sample=1):
+    def __init__(self, path_file=None):
         # word count
-        if path_file:
-            word_count = self.count_from_file(path_file)
-            # truncate low fq word
-            self.word_to_index = self.create_word_to_index(word_count, min_sample)
-        else:
-            raise RuntimeError('need path_file')
+        self.word_count = VocabBuilder.count_from_file(path_file)
+        self.word_to_index = {}
 
+    @staticmethod
+    def count_from_file(path_file, tokenizer=ut._tokenize):
+        """
+        count word frequencies in a file.
+        Args:
+            path_file:
 
-    def count_from_file(self, path_file):
+        Returns:
+            dict: {word_n :count_n, ...}
 
-        word_count = defaultdict(int)
-
-        df = pd.read_csv(path_file,delimiter='\t')
-        df['body'] = df['body'].apply(ut._tokenize)
-        samples = df['body'].values.tolist()
-
-        for sample in samples:
-            for tkn in sample:
-                word_count[tkn.lower()] += 1
-
+        """
+        df = pd.read_csv(path_file, delimiter='\t')
+        # tokenize
+        df['body'] = df['body'].apply(tokenizer)
+        # count
+        word_count = Counter([tkn for sample in df['body'].values.tolist() for tkn in sample])
         print('Original Vocab size:{}'.format(len(word_count)))
-
         return word_count
 
-    def create_word_to_index(self, word_count, min_sample=1):
+    def get_word_index(self, min_sample=1, padding_marker='__PADDING__', unknown_marker='__UNK__',):
+        """
+        create word-to-index mapping. Padding and unknown are added to last 2 indices.
 
-        # create vocab
-        word_to_index = {}
-        _removed = 0
+        Args:
+            min_sample: for Truncation
+            padding_marker: padding mark
+            unknown_marker: unknown-word mark
 
-        for tkn, fq in sorted(word_count.items()):
-            if fq < min_sample:
-                _removed += 1
-            else:
-                word_to_index[tkn] = len(word_to_index) + 2
+        Returns:
+            dict: {word_n: index_n, ... }
 
-        print('Turncated vocab size:{} (removed:{})'.\
-            format(len(word_to_index),_removed))
+        """
+        # truncate low fq word
+        _word_count = filter(lambda x:  min_sample<=x[1], self.word_count.items())
+        tokens = zip(*_word_count)[0]
 
-        return word_to_index
+        # inset padding and unknown
+        self.word_to_index = { tkn: i for i, tkn in enumerate([padding_marker, unknown_marker] + sorted(tokens))}
+        print('Turncated vocab size:{} (removed:{})'.format(len(self.word_to_index),
+                                                            len(self.word_count) - len(self.word_to_index)))
+        return self.word_to_index, None
 
-    def get_word_index(self, inc_unknown=True, unknown_marker='__UNK__'):
 
-        if inc_unknown and unknown_marker not in self.word_to_index:
-            self.word_to_index[unknown_marker] = 1
+class GloveVocabBuilder(object) :
 
-        elif inc_unknown:
-            raise RuntimeError('Unknown Marker:{} is already used.'.\
-                               format(unknown_marker))
+    def __init__(self, path_glove):
+        self.vec = None
+        self.vocab = None
+        self.path_glove = path_glove
 
-        self.word_to_index['__PADDING__'] = 0
+    def get_word_index(self, padding_marker='__PADDING__', unknown_marker='__UNK__',):
+        _vocab, _vec = torchwordemb.load_glove_text(self.path_glove)
+        vocab = {padding_marker:0, unknown_marker:1}
+        for tkn, indx in _vocab.items():
+            vocab[tkn] = indx + 2
+        vec_2 = torch.zeros((2, _vec.size(1)))
+        vec_2[1].normal_()
+        self.vec = torch.cat((vec_2, _vec))
+        self.vocab = vocab
+        return self.vocab, self.vec
 
-        return self.word_to_index
+
+
+
 
 
 if __name__ == "__main__":
 
-    v_builder = VocabBuilder(path_file='data/data_1_train.tsv', min_sample=10)
-    d = v_builder.get_word_index()
+    # v_builder = VocabBuilder(path_file='data/train.tsv')
+    # d = v_builder.get_word_index(min_sample=10)
+    # print (d['__UNK__'])
+    # for k, v in sorted(d.items())[:100]:
+    #     print (k,v)
+
+    v_builder = GloveVocabBuilder()
+    d, vec = v_builder.get_word_index()
     print (d['__UNK__'])
     for k, v in sorted(d.items())[:100]:
         print (k,v)
+        print(v)
 
