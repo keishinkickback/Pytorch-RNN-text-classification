@@ -33,9 +33,9 @@ parser.add_argument('--layers', default=2, type=int, metavar='N', help='number o
 parser.add_argument('--classes', default=8, type=int, metavar='N', help='number of output classes')
 parser.add_argument('--min-samples', default=5, type=int, metavar='N', help='min number of tokens')
 parser.add_argument('--cuda', default=False, action='store_true', help='use cuda')
-parser.add_argument('--glove', default='glove/glove.6B.100d.txt', action='store_true', help='path to glove txt')
+parser.add_argument('--glove', default='glove/glove.6B.100d.txt', help='path to glove txt')
 parser.add_argument('--rnn', default='LSTM', choices=['LSTM', 'GRU'], help='rnn module type')
-parser.add_argument('--mean_seq', default=False, action='store_true', help='use mean of rnn outputs')
+parser.add_argument('--mean_seq', default=False, action='store_true', help='use mean of rnn output')
 parser.add_argument('--clip', type=float, default=0.25, help='gradient clipping')
 args = parser.parse_args()
 
