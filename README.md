@@ -12,7 +12,7 @@
 
 ## Preprocessing
 - The following command will download the dataset used in
- [Learning to Classify Short and Sparse Text & Web with Hidden Topics from Large-scale Data Collections](http://wwwconference.org/www2008/papers/pdf/p91-phanA.pdf)
+ [Learning to Classify Short and Sparse Text & Web with Hidden Topics from Large-scale Data Collections](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.332.6000&rep=rep1&type=pdf)
  from [here](http://jwebpro.sourceforge.net/data-web-snippets.tar.gz) and process it for training.
 - Also it download GloVe embeddings.
 ```
