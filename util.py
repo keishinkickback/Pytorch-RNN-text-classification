@@ -15,7 +15,7 @@ LABEL_TO_INDEX = {
 
 def create_tsv_file(path_in, path_out):
 
-    with open(path_in,'r') as f, open(path_out,'w') as fw:
+    with open(path_in,'r', encoding = 'utf-8') as f, open(path_out,'w',encoding = 'utf-8') as fw:
         writer = csv.writer(fw, delimiter='\t')
         writer.writerow(['label','body'])
         for line in f:
